@@ -4,3 +4,7 @@ y = 3
 x+1
 
 #stupid goddamn program
+
+git remote -v
+
+x+y
