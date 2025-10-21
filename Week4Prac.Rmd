@@ -2,4 +2,5 @@ x = 1
 y = 3
 
 x+1
-use_github()
+usethis::use_git_remote("https://github.com/arlafleur99/Practical", url = NULL, overwrite = TRUE)
+
