@@ -48,5 +48,6 @@ World_Map_GII_Only <- World_Map_GII%>%
 plot(World_Map_GII_Only)
 
 #Wanted to see if could improve the visual, couldn't figure it out 
-  
+
+
 
