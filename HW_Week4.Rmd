@@ -1,0 +1,52 @@
+#First read in the csv
+
+here::here
+GII_Global_Index <- read_csv("HDR25_Composite_indices_complete_time_series.csv")
+
+#then select the columns of data desired 
+
+GII_Diff <- GII_Global_Index%>%
+  dplyr::select(contains("country"),
+  contains("gii_2019"), 
+  contains("gii_2010"))
+
+GII_Diff
+
+#use the mutate command to get the difference of the two data sets 
+
+GII_Diff <- GII_Diff%>%
+  mutate(difference= (gii_2019 - gii_2010))
+  
+#remove the 2010 and 2019 columns from the data frame for ease of merging 
+
+GII_Diff_Only <- GII_Diff%>%
+  select(-gii_2019, -gii_2010)
+  
+print(GII_Diff_Only)
+
+#see which layers are available in the geojson. This, as I realized, wasn't necessary.
+
+st_layers(here("World_Countries_(Generalized)_9029012925078512962.geojson"
+
+#I double clicked on the geojson to see which columns I could use for proper merging of the GII.csv data
+
+World_Map_GII <- World_Map%>%
+  merge(.,
+        GII_Diff_Only,
+        by.x="COUNTRY", 
+        by.y="country")
+
+plot(World_Map_GII)
+
+#plotted the world map to see if it worked--realized I could remove the other maps by using the "select(-) command
+
+World_Map_GII_Only <- World_Map_GII%>%
+  select(-COUNTRY, -FID, -ISO, -COUNTRYAFF, -AFF_ISO)
+
+#plotted the world map that just shows the difference between 2010 and 2019  
+
+plot(World_Map_GII_Only)
+
+#Wanted to see if could improve the visual, couldn't figure it out 
+  
+
