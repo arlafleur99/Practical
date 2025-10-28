@@ -1,0 +1,43 @@
+Airbnbcsv <- read_csv("Week5Prac/listings.csv")%>%
+  st_as_sf(., coords = c("longitude", "latitude"), 
+      crs = 4326) %>%
+  st_transform(., 27700)%>%
+  filter(room_type == 'Entire home/apt' & availability_365 =='365')
+
+#27700 is EPSG code for the brit nat grid (CRS). Changing data from WGS84 to OSBG36
+
+OSM <- st_read("Week5Prac/gis_osm_pois_a_free_1.shp")%>%
+st_transform(., 27700)%>%
+filter(fclass == 'hotel')
+
+print(OSM)
+
+WorldCities <- st_read("Week5Prac/World_Cities.shp")%>%
+  st_transform(., 27700)
+
+WorldCities2 <- WorldCities%>%
+  filter(CNTRY_NAME=='United Kingdom'&
+    WorldCities$CITY_NAME=='Birmingham'|
+    WorldCities$CITY_NAME=='London'|
+    WorldCities$CITY_NAME=='Edinburgh')
+    
+UkOutline <- st_read("Week5Prac/gadm41_GBR.gpkg")
+
+plot(UkOutline)
+
+#explaination of joining (st_join or left_join): if there's two datasets/dataframes, the join function will append the data from the RIGHT to the LEFT
+#Based on spatial unit rather than unique column value. You need to denote whats on the left. 
+#Does it automatically based on matching spatial values
+#creates new row for each hotel
+
+Londonborough <- st_read("Week5Prac/statistical-gis-boundaries-london/statistical-gis-boundaries-london/ESRI/London_Borough_Excluding_MHW.shp")%>%
+  st_transform(., 27700)
+
+print(Londonborough)
+
+Hotels <- st_join(Londonborough, OSM)
+
+Airbnbs <- st_join(Londonborough, Airbnbcsv)
+
+head(Hotels)
+
