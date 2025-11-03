@@ -1,3 +1,7 @@
+library(sf)
+library(here)
+library(tidyverse)
+
 Airbnbcsv <- read_csv("Week5Prac/listings.csv")%>%
   st_as_sf(., coords = c("longitude", "latitude"), 
       crs = 4326) %>%
@@ -21,7 +25,8 @@ WorldCities2 <- WorldCities%>%
     WorldCities$CITY_NAME=='London'|
     WorldCities$CITY_NAME=='Edinburgh')
     
-UkOutline <- st_read("Week5Prac/gadm41_GBR.gpkg")
+UkOutline <- st_read("Week5Prac/gadm41_GBR.gpkg")%>%
+  st_transform(., 27700)
 
 plot(UkOutline)
 
@@ -41,3 +46,347 @@ Airbnbs <- st_join(Londonborough, Airbnbcsv)
 
 head(Hotels)
 
+#While data has been entered, we want to format it differently. Seeking a ROW PER BOROUGH, that has a cell with the count of ALL AIRBNBs/Hotels
+#can achieve this with the "group_by()" command, followed by "summarise()" 
+#Group_by creates temporary groups that won't appear when data is printed (I think this is referring to the print command)
+#summarize takes groups and provides a summary--in this case its count per group (n) or how many times the Borough pops up
+
+#here's what it looks like when put together
+
+HotelSum <- Hotels%>%
+  group_by(., GSS_CODE, NAME)%>%
+  summarise('Accommodation Count' = n())  
+  
+#genuinely have no idea where 'Accomodation Count' is coming from, or what = n means 
+#answer: accomodation count is the summary value that WE create, with n = the amount of times the borough occurs in the list
+
+print(HotelSum)
+
+AirBnbSum <- Airbnbs%>%
+  group_by(., GSS_CODE, NAME)%>%
+  summarise('Accomodation Count' = n())
+
+print(AirBnbSum, n = 23)
+
+#issue: even after being filtered, some Boroughs will display a value of 1 even if there's no hotels/airbnbs that match criteria. How to address this?
+# the st_join data = 0 Hotels
+#comapring Hotels vs Hotelsum
+Hotels %>%
+  filter(NAME=="Barking and Dagenham")
+  
+HotelSum %>%
+  filter(NAME=="Barking and Dagenham")
+
+#for some reason mine shows 10 instead of 1
+#I must have filtered these wrong when entering the hotels/airbnbs
+#anyway, imagine it has a value of 1; how do we address this? 
+
+#Resolve using Topological Relationships. Visualize a shape to represent a list of data (in this case, the Hotels list). Then, to see where things
+#PROPERLY overlap/intersect, visualize another shape to represent the shorter (smaller data set, i.e., hotelsum)
+#through various commands, manipulate this relationship (warping the shapes in various ways to represent the overlap)
+
+#to better visualize this: see https://docs.qgis.org/3.22/en/docs/user_manual/processing_algs/qgis/vectorselection.html#select-by-location
+#way to filter by location depending on where certain areas/data intersect/overlap/contain/are within/etc 
+
+#st_contains(A, B), where we are seeing if the A contains the B value
+
+Hotels_example <-st_contains(Londonborough, OSM)
+
+Hotels_example
+
+#reminder, that OSM is our hotel list 
+
+#Now, instead of doing the St_join command and getting incorrect data, we can use the st_contains command for proper filtering 
+
+Accomodation_contained <- Londonborough%>%
+  mutate(hotels_n = lengths(st_contains(., OSM)))%>%
+  mutate(airbnbs_n = lengths(st_contains(., Airbnbs)))
+
+# the group by and summarise data = 1 Hotel!
+
+Accomodation_contained %>%
+  filter(NAME=="Barking and Dagenham")
+  
+#still shows the wrong amount of hotels and airbnbs so i seriously must have filtered the data wrong, or the OSM data has been updated???? I'm not 
+#sure 
+
+#THE POINT IS: there's an alternative to ST_Join by using st_contains/topographical relationships 
+#but when to use which? 
+
+#st_join: want to join the attributes of two spatial objects; i.e., knowing which borough EACH hotel is in
+#st_join: AND, if I  join polygons or points of the EXACT SAME geometry (London_borough1 & London_borough2)
+
+#topological relationships are good for when you want to know the COUNT of something (in this case hotels) without explaining which borough the individually named hotel is in. 
+
+#need to review this sheesh 
+
+#time for mapping stuff which is done with tmapper (abbreviated to TM in commands)
+
+library(tmap)
+
+
+#basic tmap commands:
+#reading in shp file with tm_shape() 
+#setting the map layer (e.g. polygons (tm_polygons()), symbols (tm_symbols()), raster (tm_raster()), text (tm_text()), lines (tm_lines()) etc).
+#applying a derived function (e.g. border (tm_borders()), fill (tm_fill()), markers (tm_markers()).
+
+#here's a longer list: https://r-tmap.github.io/tmap-book/layers.html
+
+#can change the "mode" of the tmapper
+
+tmap_mode("plot")
+
+#with this active, the following map will be plotted 
+
+tm1 <- tm_shape(Accomodation_contained) +
+  #set map layer (in this case it's hotels)
+  tm_polygons("hotels_n", 
+  col = "black", lwd=0.5, lty="dashed",)
+
+#again, my map doesn't match the practical likely due to misinput
+
+tm1
+
+tm_no_map_layer <- tm_shape(Accomodation_contained) + 
+  # there is no tm_polygons() if we just want the map with no spatial data
+  tm_borders(col = "darkblue")
+
+tm_no_map_layer
+
+#adding more data to map using various tmap commands. Must first remember to set the mode to plot
+
+tmap_mode("plot")
+
+# plot each map
+tm1 <- tm_shape(Accomodation_contained) + 
+  tm_polygons(fill ="hotels_n",
+              col = "black", 
+              lwd = 0.5,
+              lty="dashed",
+              fill.chart = tm_chart_violin(),
+              # above this was the same as before
+              fill.scale = tm_scale_intervals(
+                values="brewer.bu_pu",
+                n=5,
+                style="jenks"))
+
+tm1
+
+#i love not having certain details explined. like, what does style = jenks MEAN??????
+
+#i take it back it was explained
+
+#link for chart options: https://r-tmap.github.io/tmap/articles/basics_charts 
+#in this case we used a violin chart 
+#n = number of breaks in data set to have, we're using 5
+#values = color. Chosen from the brewer colors list; other lists available: 
+
+install.packages("Rtools")
+
+install.packages("colorblindcheck")
+library(Rtools)
+
+library(colorblindcheck)
+cols4all::c4a_gui() 
+
+#thats so cool that Rtools isn't available for this version of R i love it
+
+#anyway. To accurately compare airbnbs to hotels in maps they need to have consistent breaks. We start by determining which data set has the larger range
+
+stats <- Accomodation_contained %>%
+  st_drop_geometry() %>%
+  dplyr::select(hotels_n, airbnbs_n) %>%  
+  summarise(across(everything(), list(
+    min = min,
+    max = max,
+    mean = mean,
+    median = median,
+    sd = sd
+  )))
+  
+#this creates a data frame that shows the range of airbnbs vs hotels. The prac says there should be more airbnbs but i messed it up and there's more hotels. So we're rolling with that
+
+#note, WE REALLY REALLY NEED TO GO OVER PRAC 2 AGAIN!!!!!
+#go out and buy some flashcards, markers 
+
+library(classInt)
+
+#using Jenks breaks for 5 classes; see wikipedia article for Jenks optimization; method seeks to reduce the variance within classes and maximize the variance between classes. So 
+
+breaks <- Accomodation_contained%>%
+  st_drop_geometry()%>%
+  #need a numeric vector not a dataframe or tibble (again, I don't really know what the difference is. I guess vector would include spatial data?) 
+  pull(airbnbs_n) %>%             
+  classIntervals(., n = 5, style = "jenks")
+  
+breaks$brks
+
+#i guess the breaks are consistent now. i really don't know how though. 
+
+tm1 <- tm_shape(Accomodation_contained) +
+    tm_polygons(
+      fill = c("hotels_n", "airbnbs_n"),
+      fill.scale = tm_scale_intervals(values = "brewer.blues", breaks=breaks$brks),
+      # set the legend
+      fill.legend = tm_legend(title="Accomodation count",
+                              title.size=0.85,
+                              size=0.8,
+                              # plot outside of the main map
+                              #explained below
+                              position=tm_pos_out("right", 
+                                                  "center",
+                                                  pos.v = "center")),
+      # all facets share the same legend
+      fill.free = FALSE)+
+  # make 2 rows for the facets
+  tm_facets(nrow=2)
+
+tm1
+
+#commands of interest
+#tm_pos_out(): sets the position for the legend using "right and center" commands/locations; moves it to a column right of the maps, and centers it hortizontally within that column 
+#pos.v = "center" : centers the legend vertically (hence, pos.v)
+#The vertical (pos.v) and horizontal (pos.h) positions can also be set numerically where in relation to the top left hand corner of the object you are placing.
+#0 = left (pos.h) or bottom (pos.v) 1 = right (pos.h) or top (pos.v)
+
+#we can continue to edit the plot using various TM commands 
+
+#somewhat self-explanitory; see below
+
+# change headings or remove
+
+tm2 <- tm1+
+  tm_layout(panel.labels=c("Hotels", "Airbnb"),
+            panel.show = TRUE
+            #panel.label.bg.color = "transparent",
+            )+
+  
+  tm_compass(type= "arrow",
+            size=1.8, 
+            position = tm_pos_out("right", 
+                                  "center",
+                                  pos.h= -0.05,
+                                  pos.v =0.72))+
+  tm_scalebar(text.size = 0.7,
+              width=10,
+              breaks=c(0,10,20),
+              position = tm_pos_out("right",
+                                    "center", 
+                                    pos.h=0.075,
+                                    pos.v = 0.68))+
+  # we could use tm_credits to place sub-titles like (A) or (B)
+  # on the map.
+  tm_credits("(c) OpenStreetMap contrbutors and Air b n b",
+             size=0.6,
+             position = tm_pos_out("center",
+                                   "bottom",
+                                   pos.v = 1.5,
+                                   pos.h=-0.02))
+
+tm2
+
+#NOTE: THIS IS REALLY IMPORTANT SO PLEEEEEEASE NOTE!!!!!
+#YOU NEED TO SAVE THE PLOT
+
+tmap_save(tm2, "Week5Prac/1_facet.png", width = 8, height = 6, units="in", dpi = 300)
+
+qtm(UkOutline)
+
+newbb <- c(xmin=-296000, ymin=5408, xmax=655696, ymax=1000000)
+  
+UK_outlinecrop <- UkOutline$geometry %>%
+  st_crop(., newbb)
+  
+tm3 <- tm_shape(UkOutline)+ 
+  tm_polygons(col="darkslategray1")+
+    tm_layout(frame=FALSE)+
+  tm_shape(WorldCities2) +
+    #adds the city points
+    tm_symbols(shape=20,
+               fill = "orange",
+               #outline colour
+               col="black",
+               size=0.8)+
+        #add the city labels, x and y move the label around the point
+    tm_text("CITY_NAME", xmod=-1, ymod=-0.5)
+
+
+tm3
+
+#I dont really know whats happening at this point; it's an "inset" map of the area 
+
+# st_bbox gives the bounding x and y coordinates 
+Londonbb <- st_bbox(Accomodation_contained,
+                    crs = st_crs(Accomodation_contained))%>%
+# st_as_sfc coverts the coordinates to an sf object
+  st_as_sfc()
+
+tm4 <- tm3 +
+  tm_shape(Londonbb)+ 
+  tm_borders(col = "grey40", lwd = 3)+
+    tm_layout(frame=FALSE,
+            bg.color = "transparent")
+
+
+inset <- tmap_grob(tm4, asp=1.1)
+
+final_map<- tm2+
+  tm_inset(inset,
+             position = tm_pos_out("right", "center"))
+tmap_save(final_map, "prac5_data/2_facet.png", width = 8, height = 6, units="in", dpi = 300)
+
+library(ggplot2)
+
+accom_long <- Accomodation_contained %>%
+  # drop geometry for plotting
+  st_drop_geometry() %>%  
+  pivot_longer(
+    cols = c(hotels_n, airbnbs_n),
+    names_to = "accom_type",
+    values_to = "count"
+  )
+  
+violin <- accom_long %>%
+  ggplot(aes(x = accom_type, 
+             # number
+             y = count, 
+             # hotels or airbnb 
+             fill = accom_type)) +
+  geom_violin(trim = FALSE, 
+              color = "grey30", 
+              alpha = 0.8) +
+  scale_fill_brewer(palette = "Pastel1") +
+  labs(
+    title = "",
+    x = "",
+    y = "",
+    fill = "black"
+  ) +
+  # change the labels from the column names to..
+scale_x_discrete(labels = c("hotels_n" = "Hotels", 
+                            "airbnbs_n" = "Airbnbs"))+
+  theme_minimal(base_size = 13)+
+  theme(
+    # no legend
+    legend.position = "none",
+    # all text to black
+    text = element_text(color = "black"),         # set all text to black
+    axis.text = element_text(color = "black"),    # axis tick labels
+    axis.title = element_text(color = "black"),   # axis titles (if used)
+    plot.title = element_text(color = "black")    # title (if used)
+  )
+  
+library(grid)
+
+# Open PNG device
+png("prac5_data/3_facet.png", width = 8, height = 6, units="in", res = 300)
+
+tm2
+print(tm4, vp = viewport(x=0.68, y= 0.25, width = 0.3, height = 0.35))
+print(violin, vp = viewport(x=0.67, y= 0.83, width = 0.25, height = 0.35))
+
+
+# Close device
+dev.off()
+
+#practical finished. I comprehended maybe like 25% of this. I think i might flunk this module :(
