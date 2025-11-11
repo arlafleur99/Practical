@@ -1,0 +1,98 @@
+library(tidyverse)
+library(readr)
+library(dplyr)
+library(ggplot2)
+library(janitor)
+library(sf)
+library(terra)
+install.packages("spatstat")
+library(spatstat)
+library(here)
+library(sp)
+library(tmap)
+library(tmaptools)
+
+```{r}
+LondonBoroughs <- st_read(here::here("Week6Prac", "statistical-gis-boundaries-london", "ESRI", "London_Borough_Excluding_MHW.shp"))
+
+```
+
+First thing to do is to read in the Borough information so that we have an area to apply our point data 
+
+In this case its borough information, and we're transforming the CRS to the UK projection
+
+
+```{r}
+library(stringr)
+BoroughMap <- LondonBoroughs %>%
+  dplyr::filter(str_detect(GSS_CODE, "^E09"))%>%
+  st_transform(., 27700)
+
+qtm(BoroughMap)
+
+summary(BoroughMap)
+
+BoroughMap
+```
+```{r}
+Blueplaques <- st_read("https://s3.eu-west-2.amazonaws.com/openplaques/open-plaques-london-2018-04-08.geojson")
+
+Blueplaques <- Blueplaques%>%
+  st_transform(., 27700)
+
+Blueplaques
+```
+Overlaying point map on top of borough map; using tmap commands to tidy the display 
+
+```{r}
+tmap_mode("plot")
+
+tm_shape(BoroughMap) + 
+  tm_polygons(fill_alpha = 0.5) + 
+tm_shape(Blueplaques) + 
+  tm_dots(fill = "blue", size=0.1)
+```
+need to tidy data; there are points that are outside of the boroughmap which will interfere with spatial analysis later. delete them.
+
+```{r}
+Blueplaques <- distinct(Blueplaques)
+
+#this removes plaques with same grid reference 
+
+#then select the plaques that ONLY fall inside London
+
+#, , operator controls which attributes of points are kept
+
+BlueplaquesSub <- Blueplaques[BoroughMap,] 
+
+#putting brackets around boroughmap means we are using it as a subset; using its extent to modify the blueplaque point map 
+
+#we could also use BluePlaquesSub <- BluePlaques[BoroughMap, , op = st_within]
+
+tmap_mode("plot")
+
+tm_shape(BoroughMap) +
+  tm_polygons(fill_alpha = 0.5)+
+tm_shape(BlueplaquesSub) +
+  tm_dots(fill = "blue", size=0.1)
+
+
+  
+```
+Spatial subsetting: selecting points or polygons within polygons; essentially presence or absence of an SF object
+spatial clipping: determine where datasets overlap, touch, don't touch, and extract those parts 
+spatial joining: join two datasets together; can use spatial subsetting functions as the default is st_intersects()
+```{r}
+# add sparse=false to get the complete matrix.
+# this is the same as select by location in QGIS
+# filter from dplyr is the same as select by attribute 
+intersect_indices <-st_intersects(BoroughMap, Blueplaques)
+
+```
+spatial clipping: take two spatial layers that intersect, extract something; example: overlapping areas. Essentially, different ways to display different topological relations
+
+
+
+
+
+
